@@ -72,6 +72,8 @@ class TestFileTiff:
 
     def test_closed_file(self) -> None:
         with warnings.catch_warnings():
+            warnings.simplefilter("error")
+
             im = Image.open("Tests/images/multipage.tiff")
             im.load()
             im.close()
@@ -88,6 +90,8 @@ class TestFileTiff:
 
     def test_context_manager(self) -> None:
         with warnings.catch_warnings():
+            warnings.simplefilter("error")
+
             with Image.open("Tests/images/multipage.tiff") as im:
                 im.load()
 
@@ -108,9 +112,6 @@ class TestFileTiff:
             assert_image_equal_tofile(im, "Tests/images/hopper.tif")
 
         with Image.open("Tests/images/hopper_bigtiff.tif") as im:
-            # multistrip support not yet implemented
-            del im.tag_v2[273]
-
             outfile = str(tmp_path / "temp.tif")
             im.save(outfile, save_all=True, append_images=[im], tiffinfo=im.tag_v2)
 
@@ -684,6 +685,13 @@ class TestFileTiff:
             with Image.open(outfile) as reloaded:
                 assert_image_equal_tofile(reloaded, infile)
 
+    def test_invalid_tiled_dimensions(self) -> None:
+        with open("Tests/images/tiff_tiled_planar_raw.tif", "rb") as fp:
+            data = fp.read()
+        b = BytesIO(data[:144] + b"\x02" + data[145:])
+        with pytest.raises(ValueError):
+            Image.open(b)
+
     @pytest.mark.parametrize("mode", ("P", "PA"))
     def test_palette(self, mode: str, tmp_path: Path) -> None:
         outfile = str(tmp_path / "temp.tif")
@@ -723,6 +731,20 @@ class TestFileTiff:
         mp.seek(0, os.SEEK_SET)
         with Image.open(mp) as reread:
             assert reread.n_frames == 3
+
+    def test_fixoffsets(self) -> None:
+        b = BytesIO(b"II\x2a\x00\x00\x00\x00\x00")
+        with TiffImagePlugin.AppendingTiffWriter(b) as a:
+            b.seek(0)
+            a.fixOffsets(1, isShort=True)
+
+            b.seek(0)
+            a.fixOffsets(1, isLong=True)
+
+            # Neither short nor long
+            b.seek(0)
+            with pytest.raises(RuntimeError):
+                a.fixOffsets(1)
 
     def test_saving_icc_profile(self, tmp_path: Path) -> None:
         # Tests saving TIFF with icc_profile set.

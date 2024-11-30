@@ -338,6 +338,8 @@ class TestFilePng:
         with Image.open(TEST_PNG_FILE) as im:
             # Assert that there is no unclosed file warning
             with warnings.catch_warnings():
+                warnings.simplefilter("error")
+
                 im.verify()
 
         with Image.open(TEST_PNG_FILE) as im:
@@ -424,8 +426,10 @@ class TestFilePng:
         im = roundtrip(im, pnginfo=info)
         assert im.info == {"spam": "Eggs", "eggs": "Spam"}
         assert im.text == {"spam": "Eggs", "eggs": "Spam"}
+        assert isinstance(im.text["spam"], PngImagePlugin.iTXt)
         assert im.text["spam"].lang == "en"
         assert im.text["spam"].tkey == "Spam"
+        assert isinstance(im.text["eggs"], PngImagePlugin.iTXt)
         assert im.text["eggs"].lang == "en"
         assert im.text["eggs"].tkey == "Eggs"
 

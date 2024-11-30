@@ -7,6 +7,7 @@ import re
 import shutil
 import struct
 import subprocess
+from typing import Any
 
 
 def cmd_cd(path: str) -> str:
@@ -43,21 +44,19 @@ def cmd_nmake(
     target: str = "",
     params: list[str] | None = None,
 ) -> str:
-    params = "" if params is None else " ".join(params)
-
     return " ".join(
         [
             "{nmake}",
             "-nologo",
             f'-f "{makefile}"' if makefile is not None else "",
-            f"{params}",
+            f'{" ".join(params)}' if params is not None else "",
             f'"{target}"',
         ]
     )
 
 
 def cmds_cmake(
-    target: str | tuple[str, ...] | list[str], *params, build_dir: str = "."
+    target: str | tuple[str, ...] | list[str], *params: str, build_dir: str = "."
 ) -> list[str]:
     if not isinstance(target, str):
         target = " ".join(target)
@@ -111,16 +110,16 @@ ARCHITECTURES = {
 
 V = {
     "BROTLI": "1.1.0",
-    "FREETYPE": "2.13.2",
-    "FRIBIDI": "1.0.15",
-    "HARFBUZZ": "8.5.0",
-    "JPEGTURBO": "3.0.3",
+    "FREETYPE": "2.13.3",
+    "FRIBIDI": "1.0.16",
+    "HARFBUZZ": "10.0.1",
+    "JPEGTURBO": "3.0.4",
     "LCMS2": "2.16",
-    "LIBPNG": "1.6.43",
+    "LIBPNG": "1.6.44",
     "LIBWEBP": "1.4.0",
     "OPENJPEG": "2.5.2",
     "TIFF": "4.6.0",
-    "XZ": "5.4.5",
+    "XZ": "5.6.3",
     "ZLIB": "1.3.1",
 }
 V["LIBPNG_DOTLESS"] = V["LIBPNG"].replace(".", "")
@@ -129,10 +128,9 @@ V["ZLIB_DOTLESS"] = V["ZLIB"].replace(".", "")
 
 
 # dependencies, listed in order of compilation
-DEPS = {
+DEPS: dict[str, dict[str, Any]] = {
     "libjpeg": {
-        "url": f"{SF_PROJECTS}/libjpeg-turbo/files/{V['JPEGTURBO']}/"
-        f"libjpeg-turbo-{V['JPEGTURBO']}.tar.gz/download",
+        "url": f"{SF_PROJECTS}/libjpeg-turbo/files/{V['JPEGTURBO']}/FILENAME/download",
         "filename": f"libjpeg-turbo-{V['JPEGTURBO']}.tar.gz",
         "dir": f"libjpeg-turbo-{V['JPEGTURBO']}",
         "license": ["README.ijg", "LICENSE.md"],
@@ -162,7 +160,7 @@ DEPS = {
         "bins": ["cjpeg.exe", "djpeg.exe"],
     },
     "zlib": {
-        "url": f"https://zlib.net/zlib{V['ZLIB_DOTLESS']}.zip",
+        "url": "https://zlib.net/FILENAME",
         "filename": f"zlib{V['ZLIB_DOTLESS']}.zip",
         "dir": f"zlib-{V['ZLIB']}",
         "license": "README",
@@ -176,7 +174,7 @@ DEPS = {
         "libs": [r"*.lib"],
     },
     "xz": {
-        "url": f"{SF_PROJECTS}/lzmautils/files/xz-{V['XZ']}.tar.gz/download",
+        "url": f"https://github.com/tukaani-project/xz/releases/download/v{V['XZ']}/FILENAME",
         "filename": f"xz-{V['XZ']}.tar.gz",
         "dir": f"xz-{V['XZ']}",
         "license": "COPYING",
@@ -186,10 +184,10 @@ DEPS = {
             cmd_copy(r"src\liblzma\api\lzma\*.h", r"{inc_dir}\lzma"),
         ],
         "headers": [r"src\liblzma\api\lzma.h"],
-        "libs": [r"liblzma.lib"],
+        "libs": [r"lzma.lib"],
     },
     "libwebp": {
-        "url": f"http://downloads.webmproject.org/releases/webp/libwebp-{V['LIBWEBP']}.tar.gz",
+        "url": "http://downloads.webmproject.org/releases/webp/FILENAME",
         "filename": f"libwebp-{V['LIBWEBP']}.tar.gz",
         "dir": f"libwebp-{V['LIBWEBP']}",
         "license": "COPYING",
@@ -201,7 +199,7 @@ DEPS = {
         },
         "build": [
             *cmds_cmake(
-                "webp webpdemux webpmux",
+                "webp webpmux webpdemux",
                 "-DBUILD_SHARED_LIBS:BOOL=OFF",
                 "-DWEBP_LINK_STATIC:BOOL=OFF",
             ),
@@ -211,14 +209,14 @@ DEPS = {
         "libs": [r"libsharpyuv.lib", r"libwebp*.lib"],
     },
     "libtiff": {
-        "url": f"https://download.osgeo.org/libtiff/tiff-{V['TIFF']}.tar.gz",
+        "url": "https://download.osgeo.org/libtiff/FILENAME",
         "filename": f"tiff-{V['TIFF']}.tar.gz",
         "dir": f"tiff-{V['TIFF']}",
         "license": "LICENSE.md",
         "patch": {
             r"libtiff\tif_lzma.c": {
-                # link against liblzma.lib
-                "#ifdef LZMA_SUPPORT": '#ifdef LZMA_SUPPORT\n#pragma comment(lib, "liblzma.lib")',  # noqa: E501
+                # link against lzma.lib
+                "#ifdef LZMA_SUPPORT": '#ifdef LZMA_SUPPORT\n#pragma comment(lib, "lzma.lib")',  # noqa: E501
             },
             r"libtiff\tif_webp.c": {
                 # link against libwebp.lib
@@ -269,7 +267,7 @@ DEPS = {
         "libs": ["*.lib"],
     },
     "freetype": {
-        "url": f"https://download.savannah.gnu.org/releases/freetype/freetype-{V['FREETYPE']}.tar.gz",
+        "url": "https://download.savannah.gnu.org/releases/freetype/FILENAME",
         "filename": f"freetype-{V['FREETYPE']}.tar.gz",
         "dir": f"freetype-{V['FREETYPE']}",
         "license": ["LICENSE.TXT", r"docs\FTL.TXT", r"docs\GPLv2.TXT"],
@@ -294,17 +292,17 @@ DEPS = {
         "build": [
             cmd_rmdir("objs"),
             cmd_msbuild(
-                r"builds\windows\vc2010\freetype.sln", "Release Static", "Clean"
+                r"builds\windows\vc2010\freetype.vcxproj", "Release Static", "Clean"
             ),
             cmd_msbuild(
-                r"builds\windows\vc2010\freetype.sln", "Release Static", "Build"
+                r"builds\windows\vc2010\freetype.vcxproj", "Release Static", "Build"
             ),
             cmd_xcopy("include", "{inc_dir}"),
         ],
         "libs": [r"objs\{msbuild_arch}\Release Static\freetype.lib"],
     },
     "lcms2": {
-        "url": f"{SF_PROJECTS}/lcms/files/lcms/{V['LCMS2']}/lcms2-{V['LCMS2']}.tar.gz/download",  # noqa: E501
+        "url": f"{SF_PROJECTS}/lcms/files/lcms/{V['LCMS2']}/FILENAME/download",
         "filename": f"lcms2-{V['LCMS2']}.tar.gz",
         "dir": f"lcms2-{V['LCMS2']}",
         "license": "LICENSE",
@@ -498,7 +496,7 @@ def extract_dep(url: str, filename: str, prefs: dict[str, str]) -> None:
         except RuntimeError as exc:
             # Otherwise try upstream
             print(exc)
-            download_dep(url, file)
+            download_dep(url.replace("FILENAME", filename), file)
 
     print("Extracting " + filename)
     sources_dir_abs = os.path.abspath(sources_dir)
@@ -538,7 +536,7 @@ def write_script(
             print("    " + line)
 
 
-def get_footer(dep: dict) -> list[str]:
+def get_footer(dep: dict[str, Any]) -> list[str]:
     lines = []
     for out in dep.get("headers", []):
         lines.append(cmd_copy(out, "{inc_dir}"))
@@ -583,6 +581,7 @@ def build_dep(name: str, prefs: dict[str, str], verbose: bool) -> str:
             license_text += f.read()
     if "license_pattern" in dep:
         match = re.search(dep["license_pattern"], license_text, re.DOTALL)
+        assert match is not None
         license_text = "\n".join(match.groups())
     assert len(license_text) > 50
     with open(os.path.join(license_dir, f"{directory}.txt"), "w") as f:

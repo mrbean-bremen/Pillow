@@ -238,8 +238,10 @@ def test_zero_size() -> None:
 
 
 @skip_unless_feature("libtiff")
-def test_load_first() -> None:
+def test_transposed() -> None:
     with Image.open("Tests/images/g4_orientation_5.tif") as im:
+        assert im.size == (590, 88)
+
         a = numpy.array(im)
         assert a.shape == (88, 590)
 
@@ -262,4 +264,6 @@ def test_no_resource_warning_for_numpy_array() -> None:
     with Image.open(test_file) as im:
         # Act/Assert
         with warnings.catch_warnings():
+            warnings.simplefilter("error")
+
             array(im)

@@ -154,7 +154,7 @@ class TestFileJpeg:
             assert k > 0.9
 
     def test_rgb(self) -> None:
-        def getchannels(im: JpegImagePlugin.JpegImageFile) -> tuple[int, int, int]:
+        def getchannels(im: JpegImagePlugin.JpegImageFile) -> tuple[int, ...]:
             return tuple(v[0] for v in im.layer)
 
         im = hopper()
@@ -541,12 +541,12 @@ class TestFileJpeg:
     @mark_if_feature_version(
         pytest.mark.valgrind_known_error, "libjpeg_turbo", "2.0", reason="Known Failing"
     )
-    def test_qtables(self, tmp_path: Path) -> None:
+    def test_qtables(self) -> None:
         def _n_qtables_helper(n: int, test_file: str) -> None:
+            b = BytesIO()
             with Image.open(test_file) as im:
-                f = str(tmp_path / "temp.jpg")
-                im.save(f, qtables=[[n] * 64] * n)
-            with Image.open(f) as im:
+                im.save(b, "JPEG", qtables=[[n] * 64] * n)
+            with Image.open(b) as im:
                 assert len(im.quantization) == n
                 reloaded = self.roundtrip(im, qtables="keep")
                 assert im.quantization == reloaded.quantization
@@ -850,6 +850,8 @@ class TestFileJpeg:
 
             out = str(tmp_path / "out.jpg")
             with warnings.catch_warnings():
+                warnings.simplefilter("error")
+
                 im.save(out, exif=exif)
 
         with Image.open(out) as reloaded:
@@ -991,12 +993,29 @@ class TestFileJpeg:
             else:
                 assert im.getxmp() == {"xmpmeta": None}
 
+    def test_save_xmp(self, tmp_path: Path) -> None:
+        f = str(tmp_path / "temp.jpg")
+        im = hopper()
+        im.save(f, xmp=b"XMP test")
+        with Image.open(f) as reloaded:
+            assert reloaded.info["xmp"] == b"XMP test"
+
+        im.info["xmp"] = b"1" * 65504
+        im.save(f)
+        with Image.open(f) as reloaded:
+            assert reloaded.info["xmp"] == b"1" * 65504
+
+        with pytest.raises(ValueError):
+            im.save(f, xmp=b"1" * 65505)
+
     @pytest.mark.timeout(timeout=1)
     def test_eof(self) -> None:
         # Even though this decoder never says that it is finished
         # the image should still end when there is no new data
         class InfiniteMockPyDecoder(ImageFile.PyDecoder):
-            def decode(self, buffer: bytes) -> tuple[int, int]:
+            def decode(
+                self, buffer: bytes | Image.SupportsArrayInterface
+            ) -> tuple[int, int]:
                 return 0, 0
 
         Image.register_decoder("INFINITE", InfiniteMockPyDecoder)
@@ -1019,13 +1038,16 @@ class TestFileJpeg:
 
         # SOI, EOI
         for marker in b"\xff\xd8", b"\xff\xd9":
-            assert marker in data[1] and marker in data[2]
+            assert marker in data[1]
+            assert marker in data[2]
         # DHT, DQT
         for marker in b"\xff\xc4", b"\xff\xdb":
-            assert marker in data[1] and marker not in data[2]
+            assert marker in data[1]
+            assert marker not in data[2]
         # SOF0, SOS, APP0 (JFIF header)
         for marker in b"\xff\xc0", b"\xff\xda", b"\xff\xe0":
-            assert marker not in data[1] and marker in data[2]
+            assert marker not in data[1]
+            assert marker in data[2]
 
         with Image.open(BytesIO(data[0])) as interchange_im:
             with Image.open(BytesIO(data[1] + data[2])) as combined_im:
@@ -1044,6 +1066,13 @@ class TestFileJpeg:
         im = hopper("F")
 
         assert im._repr_jpeg_() is None
+
+    def test_deprecation(self) -> None:
+        with Image.open(TEST_FILE) as im:
+            with pytest.warns(DeprecationWarning):
+                assert im.huffman_ac == {}
+            with pytest.warns(DeprecationWarning):
+                assert im.huffman_dc == {}
 
 
 @pytest.mark.skipif(not is_win32(), reason="Windows only")
